@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fraud-api-deployment
+  labels:
+    app: fraud-api
+spec:
+  replicas: 2 # Runs two copies of your app for high availability
+  selector:
+    matchLabels:
+      app: fraud-api
+  template:
+    metadata:
+      labels:
+        app: fraud-api
+    spec:
+      containers:
+      - name: fraud-api-container
+        # This is the exact image you just pushed!
+        image: 579320645728.dkr.ecr.ap-south-1.amazonaws.com/fraud-detection-api:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: SAGEMAKER_ENDPOINT_NAME
+          value: "fraud-detection-endpoint" # We will create this endpoint later

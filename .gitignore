@@ -1,0 +1,36 @@
+# Python / Virtual Environments
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Environment Variables (CRITICAL: Never commit secrets)
+.env
+.env.local
+
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
+.terraform.tfstate.lock.info
+crash.log
+
+# IDEs and OS Files
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Machine Learning Artifacts (Teammate's files can get too large for Git)
+*.joblib
+*.pkl
+*.model
+*.tar.gz
