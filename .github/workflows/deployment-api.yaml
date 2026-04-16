@@ -1,73 +1,56 @@
-name: Build and Push API and UI to Amazon ECR
+name: Build and Push API and UI
 
 on:
   push:
     branches:
       - main
-    paths:
-      - 'fraud-detection-mlops/app/**'
-      - 'fraud-detection-mlops/frontend/**'
-      - 'fraud-detection-mlops/k8s/**'  # Now it watches your K8s changes too!
+      - master
+  # This adds a manual "Play" button in the Actions tab
+  workflow_dispatch: 
 
 jobs:
   build-and-push:
-    name: Build Docker Images and Deploy to EKS
     runs-on: ubuntu-latest
-
     env:
       REPOSITORY: fraud-detection-api
       REGION: ap-south-1
-      API_TAG: latest
-      UI_TAG: ui-latest
-
     steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Configure AWS Credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ env.REGION }}
+      - name: Debug Path Check
+        run: |
+          echo "Current directory structure:"
+          ls -R
 
-    - name: Login to Amazon ECR
-      id: login-ecr
-      uses: aws-actions/amazon-ecr-login@v2
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.REGION }}
 
-    # --- STEP 1: BUILD & PUSH API (BACKEND) ---
-    - name: Build and Push API Image
-      env:
-        REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-      working-directory: ./fraud-detection-mlops/app
-      run: |
-        docker build -t $REGISTRY/$REPOSITORY:$API_TAG .
-        docker push $REGISTRY/$REPOSITORY:$API_TAG
+      - name: Login to ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
 
-    # --- STEP 2: BUILD & PUSH UI (FRONTEND) ---
-    - name: Build and Push UI Image
-      env:
-        REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-      working-directory: ./fraud-detection-mlops/frontend
-      run: |
-        docker build -t $REGISTRY/$REPOSITORY:$UI_TAG .
-        docker push $REGISTRY/$REPOSITORY:$UI_TAG
+      - name: Build and Push Images
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          # Build API
+          docker build -t $REGISTRY/$REPOSITORY:latest ./fraud-detection-mlops/app
+          docker push $REGISTRY/$REPOSITORY:latest
+          # Build UI
+          docker build -t $REGISTRY/$REPOSITORY:ui-latest ./fraud-detection-mlops/frontend
+          docker push $REGISTRY/$REPOSITORY:ui-latest
 
-    # --- STEP 3: UPDATE MANIFESTS ---
-    - name: Update Deployment YAMLs with Image Paths
-      env:
-        REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-      run: |
-        sed -i "s|DOCKER_IMAGE_PLACEHOLDER|$REGISTRY/$REPOSITORY:$API_TAG|g" fraud-detection-mlops/k8s/deployment.yaml
-        sed -i "s|UI_IMAGE_PLACEHOLDER|$REGISTRY/$REPOSITORY:$UI_TAG|g" fraud-detection-mlops/k8s/ui-deployment.yaml
-
-    - name: Update kubeconfig
-      run: |
-        aws eks update-kubeconfig --name fraud-detection-eks --region ${{ env.REGION }}
-
-    # --- STEP 4: DEPLOY ---
-    - name: Deploy to EKS
-      run: |
-        kubectl apply -f fraud-detection-mlops/k8s/deployment.yaml
-        kubectl apply -f fraud-detection-mlops/k8s/service.yaml
-        kubectl apply -f fraud-detection-mlops/k8s/ui-deployment.yaml
+      - name: Deploy
+        run: |
+          aws eks update-kubeconfig --name fraud-detection-eks --region ${{ env.REGION }}
+          
+          # Replace placeholders and apply
+          sed -i "s|DOCKER_IMAGE_PLACEHOLDER|${{ steps.login-ecr.outputs.registry }}/$REPOSITORY:latest|g" fraud-detection-mlops/k8s/deployment.yaml
+          sed -i "s|UI_IMAGE_PLACEHOLDER|${{ steps.login-ecr.outputs.registry }}/$REPOSITORY:ui-latest|g" fraud-detection-mlops/k8s/ui-deployment.yaml
+          
+          kubectl apply -f fraud-detection-mlops/k8s/
