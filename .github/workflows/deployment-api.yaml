@@ -7,6 +7,7 @@ on:
     paths:
       - 'fraud-detection-mlops/app/**'
       - 'fraud-detection-mlops/frontend/**'
+      - 'fraud-detection-mlops/k8s/**'  # Now it watches your K8s changes too!
 
 jobs:
   build-and-push:
@@ -15,7 +16,7 @@ jobs:
 
     env:
       REPOSITORY: fraud-detection-api
-      REGION: ap-south-1  # <--- YOUR REGION, UNCHANGED
+      REGION: ap-south-1
       API_TAG: latest
       UI_TAG: ui-latest
 
@@ -34,6 +35,7 @@ jobs:
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
 
+    # --- STEP 1: BUILD & PUSH API (BACKEND) ---
     - name: Build and Push API Image
       env:
         REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -42,6 +44,7 @@ jobs:
         docker build -t $REGISTRY/$REPOSITORY:$API_TAG .
         docker push $REGISTRY/$REPOSITORY:$API_TAG
 
+    # --- STEP 2: BUILD & PUSH UI (FRONTEND) ---
     - name: Build and Push UI Image
       env:
         REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -50,11 +53,11 @@ jobs:
         docker build -t $REGISTRY/$REPOSITORY:$UI_TAG .
         docker push $REGISTRY/$REPOSITORY:$UI_TAG
 
+    # --- STEP 3: UPDATE MANIFESTS ---
     - name: Update Deployment YAMLs with Image Paths
       env:
         REGISTRY: ${{ steps.login-ecr.outputs.registry }}
       run: |
-        # Replace the placeholders in BOTH files
         sed -i "s|DOCKER_IMAGE_PLACEHOLDER|$REGISTRY/$REPOSITORY:$API_TAG|g" fraud-detection-mlops/k8s/deployment.yaml
         sed -i "s|UI_IMAGE_PLACEHOLDER|$REGISTRY/$REPOSITORY:$UI_TAG|g" fraud-detection-mlops/k8s/ui-deployment.yaml
 
@@ -62,10 +65,9 @@ jobs:
       run: |
         aws eks update-kubeconfig --name fraud-detection-eks --region ${{ env.REGION }}
 
+    # --- STEP 4: DEPLOY ---
     - name: Deploy to EKS
       run: |
-        # Apply Backend
         kubectl apply -f fraud-detection-mlops/k8s/deployment.yaml
         kubectl apply -f fraud-detection-mlops/k8s/service.yaml
-        # Apply Frontend
         kubectl apply -f fraud-detection-mlops/k8s/ui-deployment.yaml
