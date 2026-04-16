@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fraud-ui-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fraud-ui
+  template:
+    metadata:
+      labels:
+        app: fraud-ui
+    spec:
+      containers:
+      - name: fraud-ui
+        # This placeholder is required for your GitHub Action to work
+        image: UI_IMAGE_PLACEHOLDER
+        ports:
+        - containerPort: 7860
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "512Mi"
+          limits:
+            cpu: "500m"
+            memory: "1Gi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fraud-ui-service
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 80
+      targetPort: 7860
+      protocol: TCP
+  selector:
+    app: fraud-ui

@@ -1,4 +1,4 @@
-name: Build and Push API to Amazon ECR
+name: Build and Push API and UI to Amazon ECR
 
 on:
   push:
@@ -6,17 +6,18 @@ on:
       - main
     paths:
       - 'fraud-detection-mlops/app/**'
+      - 'fraud-detection-mlops/frontend/**'
 
 jobs:
   build-and-push:
-    name: Build Docker Image and Deploy to EKS
+    name: Build Docker Images and Deploy to EKS
     runs-on: ubuntu-latest
 
-    # Moving variables here makes them available to ALL steps in this job
     env:
       REPOSITORY: fraud-detection-api
-      IMAGE_TAG: latest
-      REGION: ap-south-1
+      REGION: ap-south-1  # <--- YOUR REGION, UNCHANGED
+      API_TAG: latest
+      UI_TAG: ui-latest
 
     steps:
     - name: Checkout Code
@@ -33,28 +34,38 @@ jobs:
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
 
-    - name: Build, tag, and push Docker image
+    - name: Build and Push API Image
       env:
         REGISTRY: ${{ steps.login-ecr.outputs.registry }}
       working-directory: ./fraud-detection-mlops/app
       run: |
-        docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
-        docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
+        docker build -t $REGISTRY/$REPOSITORY:$API_TAG .
+        docker push $REGISTRY/$REPOSITORY:$API_TAG
 
-    - name: Update Deployment YAML with Image Path
+    - name: Build and Push UI Image
+      env:
+        REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+      working-directory: ./fraud-detection-mlops/frontend
+      run: |
+        docker build -t $REGISTRY/$REPOSITORY:$UI_TAG .
+        docker push $REGISTRY/$REPOSITORY:$UI_TAG
+
+    - name: Update Deployment YAMLs with Image Paths
       env:
         REGISTRY: ${{ steps.login-ecr.outputs.registry }}
       run: |
-        # This replaces the placeholder with the actual ECR path of the new account
-        sed -i "s|DOCKER_IMAGE_PLACEHOLDER|$REGISTRY/$REPOSITORY:$IMAGE_TAG|g" fraud-detection-mlops/k8s/deployment.yaml
+        # Replace the placeholders in BOTH files
+        sed -i "s|DOCKER_IMAGE_PLACEHOLDER|$REGISTRY/$REPOSITORY:$API_TAG|g" fraud-detection-mlops/k8s/deployment.yaml
+        sed -i "s|UI_IMAGE_PLACEHOLDER|$REGISTRY/$REPOSITORY:$UI_TAG|g" fraud-detection-mlops/k8s/ui-deployment.yaml
 
     - name: Update kubeconfig
       run: |
-        # Tells the runner how to talk to your new EKS cluster
         aws eks update-kubeconfig --name fraud-detection-eks --region ${{ env.REGION }}
 
     - name: Deploy to EKS
       run: |
-        # Actually pushes the changes to the cluster
+        # Apply Backend
         kubectl apply -f fraud-detection-mlops/k8s/deployment.yaml
         kubectl apply -f fraud-detection-mlops/k8s/service.yaml
+        # Apply Frontend
+        kubectl apply -f fraud-detection-mlops/k8s/ui-deployment.yaml
