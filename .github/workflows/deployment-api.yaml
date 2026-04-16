@@ -1,44 +1,60 @@
 name: Build and Push API to Amazon ECR
 
-# This tells GitHub to run this pipeline ONLY when you push code to the 'main' branch,
-# and ONLY if files inside the 'app' directory were changed.
 on:
   push:
     branches:
       - main
     paths:
-      - 'app/**'
+      - 'fraud-detection-mlops/app/**'
 
 jobs:
   build-and-push:
-    name: Build Docker Image and Push to AWS
+    name: Build Docker Image and Deploy to EKS
     runs-on: ubuntu-latest
 
+    # Moving variables here makes them available to ALL steps in this job
+    env:
+      REPOSITORY: fraud-detection-api
+      IMAGE_TAG: latest
+      REGION: ap-south-1
+
     steps:
-    # 1. Grab the latest code from your repository
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    # 2. Securely log into your AWS account using GitHub Secrets
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ap-south-1
+        aws-region: ${{ env.REGION }}
 
-    # 3. Log Docker into your private AWS Elastic Container Registry
     - name: Login to Amazon ECR
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
 
-    # 4. Build the image and push it to AWS
     - name: Build, tag, and push Docker image
       env:
         REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        REPOSITORY: fraud-detection-api
-        IMAGE_TAG: latest # In a real enterprise setup, you'd use ${{ github.sha }} for unique versioning
-      working-directory: ./app
+      working-directory: ./fraud-detection-mlops/app
       run: |
         docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
         docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
+
+    - name: Update Deployment YAML with Image Path
+      env:
+        REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+      run: |
+        # This replaces the placeholder with the actual ECR path of the new account
+        sed -i "s|DOCKER_IMAGE_PLACEHOLDER|$REGISTRY/$REPOSITORY:$IMAGE_TAG|g" fraud-detection-mlops/k8s/deployment.yaml
+
+    - name: Update kubeconfig
+      run: |
+        # Tells the runner how to talk to your new EKS cluster
+        aws eks update-kubeconfig --name fraud-detection-eks --region ${{ env.REGION }}
+
+    - name: Deploy to EKS
+      run: |
+        # Actually pushes the changes to the cluster
+        kubectl apply -f fraud-detection-mlops/k8s/deployment.yaml
+        kubectl apply -f fraud-detection-mlops/k8s/service.yaml

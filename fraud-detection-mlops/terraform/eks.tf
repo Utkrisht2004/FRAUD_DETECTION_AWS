@@ -21,7 +21,7 @@ module "eks" {
       desired_size = 1
 
       # Using the same instance size you are familiar with for Kubernetes
-      instance_types = ["t3.medium"]
+      instance_types = ["m7i-flex.large"]
     }
   }
 

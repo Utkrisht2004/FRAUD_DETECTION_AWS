@@ -17,7 +17,7 @@ spec:
       containers:
       - name: fraud-api-container
         # This is the exact image you just pushed!
-        image: 579320645728.dkr.ecr.ap-south-1.amazonaws.com/fraud-detection-api:latest
+        image: DOCKER_IMAGE_PLACEHOLDER
         ports:
         - containerPort: 8000
         env:
