@@ -10,14 +10,6 @@ This project bypasses managed ML platforms (e.g., SageMaker) to prevent vendor l
 
 ## 🏗️ System Architecture
 
-> *(Optional: Add your architecture diagram below)*
-
-```markdown
-![Architecture](link-to-image.png)
-```
-
-The system utilizes a strictly decoupled microservices topology:
-
 ### Frontend (Gradio)
 
 Captures user transaction inputs and transmits JSON payloads to the backend.
