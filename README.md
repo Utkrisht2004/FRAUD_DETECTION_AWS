@@ -232,6 +232,3 @@ terraform destroy --auto-approve
 
 ---
 
-## 📄 License
-
-This project is intended for educational, research, and portfolio purposes. Modify and distribute according to your preferred license.
